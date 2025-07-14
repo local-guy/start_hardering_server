@@ -1,0 +1,10 @@
+---
+- name: wait_for_reconnect
+  meta: flush_handlers
+
+- name: reconnect_after_ssh_restart
+  delegate_to: localhost
+  run_once: true
+  wait_for_connection:
+    timeout: 60
+# handlers file for start_server

@@ -1,0 +1,2 @@
+[young_servers]
+learl ansible_host=192.168.166.78 ansible_user=bob ansible_ssh_private_key_file=~/.ssh/id_rsa ansible_become=yes

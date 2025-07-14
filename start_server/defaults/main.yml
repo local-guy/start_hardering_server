@@ -1,0 +1,14 @@
+---
+# Пользователь, через которого будет выполняться подключение
+remote_user: "bob"
+
+# Новый порт SSH
+ssh_port: 22
+
+# Разрешённые пользователи SSH
+ssh_permit_users:
+  - "{{ remote_user }}"
+
+# Файл локального публичного ключа
+local_ssh_key_file: "~/.ssh/id_rsa.pub"
+# defaults file for start_server

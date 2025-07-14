@@ -1,0 +1,11 @@
+- name: Test sudo
+  hosts: young_servers
+  become: yes
+  tasks:
+    - name: Run whoami as root
+      command: whoami
+      register: result
+
+    - name: Show result
+      debug:
+        msg: "{{ result.stdout }}"

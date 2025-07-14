@@ -1,0 +1,147 @@
+---
+- name: Обновление списка пакетов
+  apt:
+    update_cache: yes
+  tags: ["update"]
+
+- name: Установка необходимых пакетов
+  apt:
+    name:
+      - ufw
+      - fail2ban
+      - unattended-upgrades
+      - aide
+    state: present
+  tags: ["packages"]
+
+- name: Создание нового пользователя (если не существует)
+  user:
+    name: "{{ remote_user }}"
+    shell: /bin/bash
+    groups: sudo
+    append: yes
+    createhome: yes
+  tags: ["users"]
+
+- name: Копирование SSH-ключа на сервер
+  authorized_key:
+    user: "{{ remote_user }}"
+    key: "{{ lookup('file', local_ssh_key_file) }}"
+  tags: ["ssh"]
+
+- name: Резервная копия оригинального файла sshd_config
+  copy:
+    src: /etc/ssh/sshd_config
+    dest: /etc/ssh/sshd_config.bak
+    remote_src: yes
+    backup: no
+  tags: ["ssh"]
+
+- name: Настройка SSH — запрет root-логина
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^PermitRootLogin'
+    line: PermitRootLogin without-password
+  tags: ["ssh"]
+
+- name: Настройка SSH — отключение парольной аутентификации
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^PasswordAuthentication'
+    line: PasswordAuthentication no
+  tags: ["ssh"]
+
+- name: Настройка SSH — изменение порта
+  lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: '^Port'
+    line: Port {{ ssh_port }}
+  tags: ["ssh"]
+
+#- name: Настройка SSH — разрешённые пользователи
+ # lineinfile:
+   # path: /etc/ssh/sshd_config
+  #  regexp: '^AllowUsers'
+ #   line: "AllowUsers {{ ssh_permit_users | join(' ') }}"
+#  tags: ["ssh"]
+
+- name: Перезапуск SSHD после изменения конфига
+  service:
+    name: ssh
+    state: restarted
+  notify: wait_for_reconnect
+  tags: ["ssh"]
+
+- name: Включение UFW
+  ufw:
+    state: enabled
+  tags: ["firewall"]
+
+- name: Разрешить SSH через UFW
+  ufw:
+    rule: allow
+    port: "{{ ssh_port }}"
+    proto: tcp
+  tags: ["firewall"]
+
+- name: Разрешить HTTP через UFW
+  ufw:
+    rule: allow
+    port: 80
+    proto: tcp
+  tags: ["firewall"]
+
+- name: Разрешить HTTPS через UFW
+  ufw:
+    rule: allow
+    port: 443
+    proto: tcp
+  tags: ["firewall"]
+
+- name: Настройка автоматических обновлений
+  lineinfile:
+    path: /etc/apt/apt.conf.d/50unattended-upgrades
+    regexp: '"${distro_id}:${distro_codename}-updates";'
+    line: '        "${distro_id}:${distro_codename}-updates";'
+  tags: ["auto_update"]
+
+- name: Включение автоматических обновлений
+  copy:
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Download-Upgradeable-Packages "1";
+      APT::Periodic::AutocleanInterval "7";
+      APT::Periodic::Unattended-Upgrade "1";
+    dest: /etc/apt/apt.conf.d/10periodic
+  tags: ["auto_update"]
+
+- name: Инициализация AIDE
+  command: aideinit
+  args:
+    chdir: /var/lib/aide
+  register: aide_init
+  changed_when: "'New AIDE database created' in aide_init.stdout"
+  tags: ["aide"]
+
+- name: Настройка cron для AIDE
+  cron:
+    name: "Run AIDE check daily"
+    minute: "0"
+    hour: "6"
+    job: "/usr/bin/aide.wrapper --check"
+    user: root
+  tags: ["aide"]
+
+- name: Настройка sysctl для безопасности
+  sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    state: present
+    reload: yes
+  loop:
+    - { name: net.ipv4.tcp_syncookies, value: 1 }
+    - { name: net.ipv4.ip_local_port_range, value: "2000 65000" }
+    - { name: net.ipv4.conf.all.accept_source_route, value: 0 }
+    - { name: net.ipv4.conf.all.rp_filter, value: 1 }
+  tags: ["sysctl"]
+# tasks file for start_server

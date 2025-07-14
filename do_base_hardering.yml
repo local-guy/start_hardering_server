@@ -1,0 +1,4 @@
+- hosts: young_servers
+  become: yes
+  roles:
+    - role: start_server
